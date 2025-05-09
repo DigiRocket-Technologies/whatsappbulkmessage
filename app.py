@@ -1,439 +1,3 @@
-# #!/usr/bin/env python3
-# """
-# WhatsApp Bulk Message Sender
-# ----------------------------
-# This script automates sending bulk messages to WhatsApp contacts using WhatsApp Web.
-# Requirements:
-# - Python 3.6+
-# - Selenium
-# - Chrome WebDriver
-
-# Installation:
-# pip install selenium
-# """
-
-# import time
-# import csv
-# import os
-# from selenium import webdriver
-# from selenium.webdriver.chrome.service import Service
-# from selenium.webdriver.chrome.options import Options
-# from selenium.webdriver.common.by import By
-# from selenium.webdriver.common.keys import Keys
-# from selenium.webdriver.support.ui import WebDriverWait
-# from selenium.webdriver.support import expected_conditions as EC
-# from selenium.common.exceptions import TimeoutException, NoSuchElementException
-
-# class WhatsAppBulkSender:
-#     def __init__(self, headless=False):
-#         """Initialize the WhatsApp Bulk Message Sender."""
-#         self.driver = self._setup_driver(headless)
-#         self.wait = WebDriverWait(self.driver, 30)
-        
-#     def _setup_driver(self, headless):
-#         """Set up and return a Chrome WebDriver."""
-#         chrome_options = Options()
-#         if headless:
-#             chrome_options.add_argument("--headless")
-#         chrome_options.add_argument("--window-size=1920,1080")
-#         chrome_options.add_argument("--disable-notifications")
-#         chrome_options.add_argument("--disable-infobars")
-#         chrome_options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.110 Safari/537.36")
-#         chrome_options.add_argument("--no-sandbox")
-#         chrome_options.add_argument("--disable-dev-shm-usage")
-#         chrome_options.add_argument("--disable-extensions")
-#         chrome_options.add_argument("--disable-gpu")
-#         chrome_options.add_argument("--disable-features=VizDisplayCompositor")
-        
-#         # Attempt to create the driver with error handling
-#         try:
-#             driver = webdriver.Chrome(options=chrome_options)
-#             return driver
-#         except Exception as e:
-#             print(f"Error setting up Chrome WebDriver: {e}")
-#             print("\nPlease ensure Chrome is installed correctly and updated to the latest version.")
-#             raise
-        
-#     def start(self):
-#         """Open WhatsApp Web and wait for QR code scan."""
-#         self.driver.get("https://web.whatsapp.com")
-#         print("Please scan the QR code to log in to WhatsApp Web...")
-#         print("The browser will wait for 2 minutes for you to scan the QR code.")
-        
-#         # Wait for the user to scan the QR code and load WhatsApp Web
-#         try:
-#             # Wait for WhatsApp to load - look for either the chat/search interface or QR code
-#             self.wait.until(lambda driver: driver.find_elements(By.XPATH, '//div[@contenteditable="true"]') or 
-#                                           driver.find_elements(By.XPATH, '//canvas[contains(@aria-label, "Scan")]'))
-            
-#             # Extended wait for user to scan QR and for WhatsApp to fully load
-#             extended_wait = WebDriverWait(self.driver, 120)  # 2 minute timeout
-#             extended_wait.until(EC.presence_of_element_located((By.XPATH, '//div[@contenteditable="true"]')))
-#             print("Successfully logged in to WhatsApp Web!")
-#             return True
-#         except TimeoutException:
-#             print("\nTimeout: QR code scan took too long or WhatsApp Web didn't load properly.")
-#             print("Please try running the script again.")
-#             return False
-            
-#     def search_contact(self, contact):
-#         """Search for a contact in WhatsApp."""
-#         try:
-#             # Wait for the search or chat input to be available
-#             search_xpath = [
-#                 '//div[@contenteditable="true"][@data-tab="3"]',  # Primary search box
-#                 '//div[@role="textbox"][@contenteditable="true"]',  # Alternative search box
-#                 '//div[contains(@class, "selectable-text")][@contenteditable="true"]'  # Generic contenteditable
-#             ]
-            
-#             # Try different XPaths to find the search box
-#             search_box = None
-#             for xpath in search_xpath:
-#                 try:
-#                     search_box = self.wait.until(EC.presence_of_element_located((By.XPATH, xpath)))
-#                     if search_box and search_box.is_displayed():
-#                         break
-#                 except:
-#                     continue
-            
-#             if not search_box:
-#                 print("Could not find the search box. WhatsApp Web interface might have changed.")
-#                 return False
-            
-#             # Clear any existing text and search for the contact
-#             search_box.clear()
-            
-#             # Check if contact is likely a phone number (all digits)
-#             is_phone = contact.isdigit()
-            
-#             if is_phone:
-#                 # For phone numbers, we need to use the WhatsApp format
-#                 formatted_contact = contact
-#                 # Add the "+" if it's missing and has enough digits to be a phone number
-#                 if len(contact) > 7 and not contact.startswith('+'):
-#                     formatted_contact = f"+{contact}"
-                
-#                 search_box.send_keys(formatted_contact)
-#                 print(f"Searching for phone number: {formatted_contact}")
-#             else:
-#                 search_box.send_keys(contact)
-#                 print(f"Searching for contact: {contact}")
-                
-#             time.sleep(2)  # Wait for search results
-            
-#             # Try different approaches to find and click the contact
-#             try:
-#                 # First approach: Try to find by title attribute
-#                 xpath_patterns = [
-#                     f'//span[@title="{contact}"]',
-#                     f'//span[contains(@title, "{contact}")]',
-#                     f'//div[contains(@title, "{contact}")]',
-#                     '//div[contains(@class, "matched-text")]/..',
-#                     '//div[contains(@class, "chat-title")]'
-#                 ]
-                
-#                 for xpath in xpath_patterns:
-#                     try:
-#                         elements = self.driver.find_elements(By.XPATH, xpath)
-#                         if elements:
-#                             elements[0].click()
-#                             time.sleep(1)
-#                             return True
-#                     except:
-#                         continue
-                
-#                 # If all attempts fail for phone numbers, try direct URL approach
-#                 if is_phone and len(contact) > 7:
-#                     # Remove any + symbol for the URL
-#                     clean_number = contact.replace('+', '')
-#                     # Go directly to chat with this number
-#                     self.driver.get(f"https://web.whatsapp.com/send?phone={clean_number}")
-#                     # Wait for chat to load
-#                     self.wait.until(EC.presence_of_element_located((By.XPATH, '//div[@contenteditable="true"][@data-tab="10"]')))
-#                     time.sleep(2)
-#                     return True
-                    
-#             except (TimeoutException, NoSuchElementException):
-#                 pass
-                
-#             print(f"Could not find contact: {contact}")
-#             return False
-#         except Exception as e:
-#             print(f"Error searching for contact {contact}: {e}")
-#             return False
-            
-#     def send_message(self, message):
-#         """Send a message to the currently selected contact."""
-#         try:
-#             # Try different XPaths to find the message input box
-#             message_box_xpaths = [
-#                 '//div[@contenteditable="true"][@data-tab="10"]',
-#                 '//div[@contenteditable="true"][@spellcheck="true"]',
-#                 '//div[@role="textbox"][@contenteditable="true"]',
-#                 '//div[contains(@class, "selectable-text")][@contenteditable="true"]'
-#             ]
-            
-#             message_box = None
-#             for xpath in message_box_xpaths:
-#                 try:
-#                     message_box = self.wait.until(EC.presence_of_element_located((By.XPATH, xpath)))
-#                     if message_box and message_box.is_displayed():
-#                         break
-#                 except:
-#                     continue
-            
-#             if not message_box:
-#                 print("Could not find the message input box. WhatsApp Web interface might have changed.")
-#                 return False
-            
-#             # Check if we need to handle "unknown number" popups for new numbers
-#             try:
-#                 # Look for "OK"/"YES" buttons in popups
-#                 buttons = self.driver.find_elements(By.XPATH, '//div[@role="button" and (contains(., "OK") or contains(., "Yes") or contains(., "Continue"))]')
-#                 for button in buttons:
-#                     if button.is_displayed():
-#                         button.click()
-#                         time.sleep(1)
-#                         break
-#             except:
-#                 pass
-            
-#             # Type the message with line breaks
-#             for line in message.split('\n'):
-#                 # Clear any previous text that might be there
-#                 message_box.clear()
-#                 message_box.send_keys(line)
-#                 # For new lines
-#                 message_box.send_keys(Keys.SHIFT + Keys.ENTER)
-            
-#             # Remove the last extra line break
-#             message_box.send_keys(Keys.BACKSPACE)
-            
-#             # Send the message
-#             message_box.send_keys(Keys.ENTER)
-#             time.sleep(1)
-#             return True
-#         except Exception as e:
-#             print(f"Failed to send message: {e}")
-#             return False
-            
-#     def send_bulk_messages(self, contacts_file, message, delay=3):
-#         """Send messages to multiple contacts from a CSV file."""
-#         contacts = self._load_contacts(contacts_file)
-        
-#         if not contacts:
-#             print("No contacts found or invalid file format.")
-#             return
-            
-#         success_count = 0
-#         fail_count = 0
-        
-#         print(f"\nSending messages to {len(contacts)} contacts...\n")
-        
-#         for i, contact in enumerate(contacts, 1):
-#             contact_name = contact['name']
-            
-#             print(f"[{i}/{len(contacts)}] Sending to: {contact_name}...")
-            
-#             if self.search_contact(contact_name):
-#                 # Personalize message if needed
-#                 personalized_message = message
-#                 if '{name}' in message:
-#                     personalized_message = message.replace('{name}', contact_name)
-                
-#                 # Add any custom fields from the CSV
-#                 for key, value in contact.items():
-#                     if key != 'name' and f'{{{key}}}' in personalized_message:
-#                         personalized_message = personalized_message.replace(f'{{{key}}}', value)
-                
-#                 if self.send_message(personalized_message):
-#                     print(f"✓ Message sent to {contact_name}")
-#                     success_count += 1
-#                 else:
-#                     print(f"✗ Failed to send message to {contact_name}")
-#                     fail_count += 1
-#             else:
-#                 print(f"✗ Could not find contact: {contact_name}")
-#                 fail_count += 1
-                
-#             # Wait between messages to avoid being flagged as spam
-#             time.sleep(delay)
-            
-#         print(f"\nDone! Messages sent: {success_count}, Failed: {fail_count}")
-        
-#     def _load_contacts(self, file_path):
-#         """Load contacts from a CSV file."""
-#         contacts = []
-#         try:
-#             with open(file_path, 'r', encoding='utf-8') as file:
-#                 reader = csv.DictReader(file)
-#                 for row in reader:
-#                     if 'name' in row:
-#                         contacts.append(row)
-#                     else:
-#                         print("Error: CSV file must have a 'name' column.")
-#                         return []
-#         except Exception as e:
-#             print(f"Error loading contacts file: {e}")
-#             return []
-            
-#         return contacts
-        
-#     def quit(self):
-#         """Close the browser and end the session."""
-#         self.driver.quit()
-#         print("Browser closed. Session ended.")
-
-# def get_user_input():
-#     """Get all required inputs from the user."""
-#     print("\n===== WhatsApp Bulk Message Sender =====\n")
-    
-#     # Choose between CSV file or manual input
-#     input_method = input("Choose input method:\n1. CSV file\n2. Manual phone number input\nEnter your choice (1/2): ").strip()
-    
-#     contacts = []
-#     contacts_file = None
-    
-#     if input_method == "1":
-#         # Get contacts file
-#         while True:
-#             contacts_file = input("\nEnter the path to your contacts CSV file: ").strip()
-#             if os.path.isfile(contacts_file):
-#                 break
-#             else:
-#                 print("Error: File not found. Please enter a valid file path.")
-    
-#     elif input_method == "2":
-#         # Manual input of phone numbers
-#         print("\nEnter phone numbers one by one (with country code, no spaces or symbols)")
-#         print("Example: 14155552671 (for +1 415 555 2671)")
-#         print("Type 'DONE' when finished\n")
-        
-#         while True:
-#             phone_input = input("Enter phone number: ").strip()
-#             if phone_input.upper() == "DONE":
-#                 break
-                
-#             # Basic validation
-#             if phone_input.isdigit():
-#                 # Create a contact dict similar to what we'd get from CSV
-#                 contacts.append({"name": phone_input})
-#             else:
-#                 print("Invalid format. Please enter only digits including country code.")
-#     else:
-#         print("Invalid choice. Defaulting to manual input.")
-#         # Same manual input code as above
-#         print("\nEnter phone numbers one by one (with country code, no spaces or symbols)")
-#         print("Example: 14155552671 (for +1 415 555 2671)")
-#         print("Type 'DONE' when finished\n")
-        
-#         while True:
-#             phone_input = input("Enter phone number: ").strip()
-#             if phone_input.upper() == "DONE":
-#                 break
-                
-#             # Basic validation
-#             if phone_input.isdigit():
-#                 # Create a contact dict similar to what we'd get from CSV
-#                 contacts.append({"name": phone_input})
-#             else:
-#                 print("Invalid format. Please enter only digits including country code.")
-    
-#     # Get message
-#     print("\nEnter your message below (type END on a new line when finished):")
-#     if input_method == "1":
-#         print("You can use {name} and other column names from your CSV as placeholders.")
-#         print("Example: Hello {name}! Your {position} at {department} is confirmed.\n")
-#     else:
-#         print("Enter your message text below:\n")
-    
-#     message_lines = []
-#     while True:
-#         line = input()
-#         if line.strip() == "END":
-#             break
-#         message_lines.append(line)
-    
-#     message = "\n".join(message_lines)
-    
-#     # Get delay
-#     while True:
-#         try:
-#             delay_input = input("\nEnter delay between messages in seconds (default: 3): ").strip()
-#             delay = int(delay_input) if delay_input else 3
-#             if delay < 1:
-#                 print("Delay must be at least 1 second.")
-#                 continue
-#             break
-#         except ValueError:
-#             print("Please enter a valid number.")
-    
-#     # Ask about headless mode
-#     headless = input("\nRun in headless mode (no browser UI)? (y/n, default: n): ").strip().lower() == 'y'
-    
-#     return {
-#         'contacts_file': contacts_file,
-#         'manual_contacts': contacts,
-#         'message': message,
-#         'delay': delay,
-#         'headless': headless,
-#         'input_method': input_method
-#     }
-
-# def main():
-#     """Main function to run the WhatsApp Bulk Message Sender."""
-#     # Get all inputs from the user
-#     inputs = get_user_input()
-    
-#     # Initialize and start the sender
-#     sender = WhatsAppBulkSender(headless=inputs['headless'])
-#     try:
-#         # Start WhatsApp Web and handle login
-#         if not sender.start():
-#             sender.quit()
-#             return
-        
-#         # Handle different input methods
-#         if inputs['input_method'] == "1":
-#             # CSV file mode
-#             sender.send_bulk_messages(inputs['contacts_file'], inputs['message'], delay=inputs['delay'])
-#         else:
-#             # Manual phone numbers mode
-#             if inputs['manual_contacts']:
-#                 # Create a temporary CSV file for the manual contacts
-#                 temp_contacts_file = "temp_contacts.csv"
-#                 with open(temp_contacts_file, 'w', newline='', encoding='utf-8') as file:
-#                     writer = csv.DictWriter(file, fieldnames=['name'])
-#                     writer.writeheader()
-#                     for contact in inputs['manual_contacts']:
-#                         writer.writerow(contact)
-                
-#                 # Send messages using the temporary file
-#                 sender.send_bulk_messages(temp_contacts_file, inputs['message'], delay=inputs['delay'])
-                
-#                 # Clean up
-#                 try:
-#                     os.remove(temp_contacts_file)
-#                 except:
-#                     pass
-#             else:
-#                 print("No contacts provided. Exiting.")
-#     except Exception as e:
-#         print(f"\nAn error occurred: {e}")
-#     finally:
-#         try:
-#             input("\nPress Enter to close the browser...")
-#         except (EOFError, IOError):
-#             pass
-#         try:
-#             sender.quit()
-#         except:
-#             pass  # In case driver is already closed
-
-# if __name__ == "__main__":
-#     main()
-
-
 #!/usr/bin/env python3
 """
 WhatsApp Bulk Message Sender - GUI Application
@@ -772,6 +336,9 @@ class WhatsAppSenderGUI:
         self.root.geometry("700x700")
         self.root.minsize(600, 600)
         
+        # Define custom styles for prominent buttons
+        self.setup_styles()
+        
         # Initialize variables
         self.contacts_file_path = tk.StringVar()
         self.headless_var = tk.BooleanVar(value=False)
@@ -811,8 +378,15 @@ class WhatsAppSenderGUI:
         self.start_button = ttk.Button(controls_frame, text="Start WhatsApp", command=self.start_whatsapp)
         self.start_button.pack(side=tk.LEFT, padx=5)
         
-        self.send_button = ttk.Button(controls_frame, text="Send Messages", command=self.start_sending, state=tk.DISABLED)
-        self.send_button.pack(side=tk.LEFT, padx=5)
+        # Make the send button larger and more prominent
+        self.send_button = ttk.Button(
+            controls_frame, 
+            text="SEND MESSAGES", 
+            command=self.start_sending,
+            state=tk.DISABLED,
+            style="Send.TButton"  # Custom style for prominence
+        )
+        self.send_button.pack(side=tk.LEFT, padx=10, pady=5)
         
         self.cancel_button = ttk.Button(controls_frame, text="Cancel", command=self.cancel_operation, state=tk.DISABLED)
         self.cancel_button.pack(side=tk.LEFT, padx=5)
@@ -828,6 +402,19 @@ class WhatsAppSenderGUI:
         # Set up protocol for window close
         root.protocol("WM_DELETE_WINDOW", self.quit_application)
     
+    def setup_styles(self):
+        """Set up custom styles for buttons."""
+        style = ttk.Style()
+        
+        # Create a prominent style for the send button
+        style.configure("Send.TButton", 
+                       font=("", 10, "bold"),
+                       padding=(10, 5))
+        
+        # Create a style for section headers
+        style.configure("Header.TLabel",
+                       font=("", 11, "bold"))
+                       
     def _setup_setup_tab(self):
         """Setup the configuration tab."""
         frame = ttk.Frame(self.setup_tab, padding="10")
@@ -861,22 +448,45 @@ class WhatsAppSenderGUI:
         self.manual_frame.grid(row=3, column=0, columnspan=3, sticky=tk.NSEW, pady=(0, 15))
         self.manual_frame.grid_remove()  # Initially hidden
         
-        ttk.Label(self.manual_frame, text="Enter phone number (with country code):").grid(row=0, column=0, sticky=tk.W, padx=(0, 10), pady=5)
+        # New multi-number input
+        ttk.Label(self.manual_frame, text="Enter individual phone number:").grid(row=0, column=0, sticky=tk.W, padx=(0, 10), pady=5)
         phone_entry = ttk.Entry(self.manual_frame, textvariable=self.add_phone_var, width=20)
         phone_entry.grid(row=0, column=1, sticky=tk.W, pady=5)
         phone_entry.bind('<Return>', lambda e: self.add_phone())
         
         ttk.Button(self.manual_frame, text="Add", command=self.add_phone).grid(row=0, column=2, padx=(5, 0), pady=5)
         
-        manual_info = ttk.Label(self.manual_frame, text="Enter phone numbers with country code but without + or spaces.\nExample: 14155552671 (for +1 415 555 2671)", 
-                               justify=tk.LEFT, wraplength=500)
-        manual_info.grid(row=1, column=0, columnspan=3, sticky=tk.W, pady=(0, 5))
+        # IMPROVED: Bulk phone number input
+        ttk.Label(self.manual_frame, text="OR paste multiple phone numbers:").grid(row=1, column=0, sticky=tk.W, padx=(0, 10), pady=(15, 5))
+        
+        self.bulk_phones_frame = ttk.Frame(self.manual_frame)
+        self.bulk_phones_frame.grid(row=2, column=0, columnspan=3, sticky=tk.NSEW, pady=(0, 5))
+        
+        self.bulk_phones_text = scrolledtext.ScrolledText(self.bulk_phones_frame, wrap=tk.WORD, width=40, height=5)
+        self.bulk_phones_text.pack(fill=tk.BOTH, expand=True)
+        
+        bulk_info = ttk.Label(self.manual_frame, text="Enter one phone number per line, or separate with commas, semicolons, or spaces.\nNumbers should include country code (e.g., 14155552671).", 
+                             justify=tk.LEFT, wraplength=500)
+        bulk_info.grid(row=3, column=0, columnspan=3, sticky=tk.W, pady=(0, 5))
+        
+        # Frame for the bulk import button - prominent placement
+        bulk_btn_frame = ttk.Frame(self.manual_frame)
+        bulk_btn_frame.grid(row=4, column=0, columnspan=3, sticky=tk.W, pady=(5, 15))
+        
+        # Important button for bulk import functionality - prominently styled
+        self.add_all_btn = ttk.Button(bulk_btn_frame, text="ADD ALL NUMBERS", 
+                                     command=self.add_bulk_phones)
+        self.add_all_btn.pack(side=tk.LEFT, padx=10, pady=5)
+        
+        # Adding a note to highlight the button's function
+        ttk.Label(bulk_btn_frame, text="← Click to process all pasted numbers", 
+                 font=("", 9, "italic")).pack(side=tk.LEFT, padx=(5, 0))
         
         # Phone list
-        ttk.Label(self.manual_frame, text="Added Phone Numbers:").grid(row=2, column=0, sticky=tk.W, pady=(10, 5))
+        ttk.Label(self.manual_frame, text="Added Phone Numbers:").grid(row=5, column=0, sticky=tk.W, pady=(10, 5))
         
         self.phones_listbox_frame = ttk.Frame(self.manual_frame)
-        self.phones_listbox_frame.grid(row=3, column=0, columnspan=3, sticky=tk.NSEW, pady=(0, 5))
+        self.phones_listbox_frame.grid(row=6, column=0, columnspan=3, sticky=tk.NSEW, pady=(0, 5))
         self.phones_listbox_frame.grid_columnconfigure(0, weight=1)
         self.phones_listbox_frame.grid_rowconfigure(0, weight=1)
         
@@ -888,7 +498,7 @@ class WhatsAppSenderGUI:
         self.phones_listbox.configure(yscrollcommand=phones_scrollbar.set)
         
         phones_buttons_frame = ttk.Frame(self.manual_frame)
-        phones_buttons_frame.grid(row=4, column=0, columnspan=3, sticky=tk.E, pady=(5, 0))
+        phones_buttons_frame.grid(row=7, column=0, columnspan=3, sticky=tk.E, pady=(5, 0))
         
         ttk.Button(phones_buttons_frame, text="Remove Selected", command=self.remove_phone).pack(side=tk.RIGHT, padx=(5, 0))
         ttk.Button(phones_buttons_frame, text="Clear All", command=self.clear_phones).pack(side=tk.RIGHT)
@@ -906,7 +516,7 @@ class WhatsAppSenderGUI:
         frame.grid_columnconfigure(1, weight=1)
         frame.grid_rowconfigure(3, weight=1)
         self.manual_frame.grid_columnconfigure(1, weight=1)
-        self.manual_frame.grid_rowconfigure(3, weight=1)
+        self.manual_frame.grid_rowconfigure(6, weight=1)
         
     def _setup_message_tab(self):
         """Setup the message composition tab."""
@@ -990,6 +600,59 @@ class WhatsAppSenderGUI:
         )
         if file_path:
             self.contacts_file_path.set(file_path)
+    
+    # IMPROVED: New method to add bulk phone numbers
+    def add_bulk_phones(self):
+        """Add multiple phone numbers from the bulk input field."""
+        bulk_text = self.bulk_phones_text.get(1.0, tk.END).strip()
+        if not bulk_text:
+            return
+            
+        # Process the text to extract phone numbers
+        # First replace common separators with newlines
+        bulk_text = bulk_text.replace(',', '\n').replace(';', '\n')
+        # Then split by lines and process each
+        lines = bulk_text.split('\n')
+        
+        added_count = 0
+        invalid_count = 0
+        
+        for line in lines:
+            # Split by spaces and process each potential number
+            potential_numbers = line.split()
+            for number in potential_numbers:
+                # Clean the number
+                clean_number = number.strip()
+                if not clean_number:
+                    continue
+                    
+                # Basic validation
+                if not clean_number.replace('+', '').isdigit():
+                    invalid_count += 1
+                    continue
+                    
+                # Format phone number
+                if not clean_number.startswith('+') and len(clean_number) > 7:
+                    clean_number = f"+{clean_number}"
+                    
+                # Add to listbox and internal list
+                self.phones_listbox.insert(tk.END, clean_number)
+                self.manual_contacts.append({"name": clean_number})
+                added_count += 1
+                
+        # Clear the bulk input field
+        self.bulk_phones_text.delete(1.0, tk.END)
+        
+        # Show results
+        if added_count > 0:
+            messagebox.showinfo("Numbers Added", f"Successfully added {added_count} phone numbers to the list.")
+            if invalid_count > 0:
+                messagebox.showwarning("Invalid Numbers", f"{invalid_count} numbers were skipped because they were invalid.")
+        else:
+            if invalid_count > 0:
+                messagebox.showwarning("Invalid Numbers", f"All {invalid_count} numbers were invalid. No numbers added.")
+            else:
+                messagebox.showinfo("No Numbers", "No phone numbers were found in the input.")
             
     def add_phone(self):
         """Add a phone number to the list."""
